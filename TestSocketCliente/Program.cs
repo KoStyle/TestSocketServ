@@ -27,44 +27,17 @@ try
     using (FileStream fisfis = new("el_pollito.txt", FileMode.Append))
     {
         Console.WriteLine("I'm in [Hacker noises]");
-        //int i, j;
-        //j = 1;
-        //while ((i = ns.Read(dataPaq, 0, dataPaq.Length)) != 0)
-        //{
-        //    if (j % 100 == 0)
-        //    {
-        //        Console.WriteLine(String.Format("{0} Lectura de {1} bytes", j, i));
-        //    }
-        //    j++;
-        //    //fisfis.Write(dataPaq, 0, i);
-        //    acumulador.AddRange(dataPaq);
-        //    //jsonCommand = jsonCommand + Encoding.UTF8.GetString(dataPaq, 0, i);
-        //}
+        ComandoEnvioFichero comandoRecibido = (ComandoEnvioFichero)recibirComando(ns);
+        UInt32 crcRecalc = Crc32Algorithm.Compute(unpackageFile(comandoRecibido));
+        if (crcRecalc != comandoRecibido.Crc32)
+        {
+            Console.WriteLine("Oh oh, los CRCs no coinciiiideeeeen~~");
+        }
+        else
+        {
+            Console.WriteLine("Hurraaaah!, los CRCs van perfect");
+        }
     }
-    //FileJson fson = JsonSerializer.Deserialize<FileJson>(jsonCommand);
-    //byte[] innerDoc = Convert.FromBase64String(fson.FileBase64);
-    //UInt32 crcRecalc = Crc32Algorithm.Compute(innerDoc);
-
-    //if (crcRecalc != fson.Crc32)
-    //{
-    //    Console.WriteLine("Oh oh, los CRCs no coinciiiideeeeen~~");
-    //}
-    //else
-    //{
-    //    Console.WriteLine("Hurraaaah!, los CRCs van perfect");
-    //}
-
-    ComandoEnvioFichero feison = unpackageFile(acumulador.ToArray());
-    UInt32 crcRecalc = Crc32Algorithm.Compute(Convert.FromBase64String(feison.FileBase64));
-    if (crcRecalc != feison.Crc32)
-    {
-        Console.WriteLine("Oh oh, los CRCs no coinciiiideeeeen~~");
-    }
-    else
-    {
-        Console.WriteLine("Hurraaaah!, los CRCs van perfect");
-    }
-
 
     tcpClient.Close();
     Console.WriteLine("a.d.i.o.s");
@@ -77,11 +50,10 @@ catch (Exception e)
     Console.ReadKey();
 }
 
-ComandoEnvioFichero unpackageFile(byte[] rawData)
+byte[] unpackageFile(ComandoEnvioFichero comando)
 {
-    string conversion = Encoding.UTF8.GetString(rawData);
-    ComandoEnvioFichero res = JsonSerializer.Deserialize<ComandoEnvioFichero>(conversion);
-    return res;
+    return Convert.FromBase64String(comando.FileBase64);
+
 }
 
 IComando recibirComando(NetworkStream nws)
@@ -91,25 +63,37 @@ IComando recibirComando(NetworkStream nws)
     byte[] paqueteDatos = new byte[256];
 
 
-    //Leemos los 4 primeros bytes para tener el tamaño  en bytes del comando a recibir
-    UInt32 lecturaPendiente;
-    int nBytes = 0;
+    //Leemos los 4 primeros bytes para tener el tamaño en bytes del comando a recibir y calculamos parametros adicionales
+    UInt32 nBytesEsperados;
+    int nBytesUltimaLectura = 0;
+    int nBytesResto;
 
-    nBytes = nws.Read(paqueteDatos, 0, 4); //TODO: ver si el tamaño de un uint32 se puede poner por algun enum... aunque tampoco tiene mucho sentido
-    lecturaPendiente = BitConverter.ToUInt32(paqueteDatos);
+    nBytesUltimaLectura = nws.Read(paqueteDatos, 0, 4); //TODO: ver si el tamaño de un uint32 se puede poner por algun enum... aunque tampoco tiene mucho sentido
+    nBytesEsperados = BitConverter.ToUInt32(paqueteDatos);
 
-    int numeroLecturas = (int)Math.Ceiling((double)lecturaPendiente / paqueteDatos.Length);
+    int numeroLecturasCompletas = (int)Math.Floor((double)nBytesEsperados / paqueteDatos.Length);
+    nBytesResto = (int)(nBytesEsperados - (numeroLecturasCompletas * paqueteDatos.Length));
+
 
     //Empezamos lectura n-1 veces, la ultima lectura la hacemos a mano al final, para evitar condicionales en el bucle principal (optimizacion)
-    while ((nBytes = nws.Read(paqueteDatos, 0, paqueteDatos.Length)) != 0 && numeroLecturas > 1)
+    while ((nBytesUltimaLectura = nws.Read(paqueteDatos, 0, paqueteDatos.Length)) != 0 && numeroLecturasCompletas > 0)
     {
         buffer.AddRange(paqueteDatos);
-        numeroLecturas--;
+        numeroLecturasCompletas--;
     }
 
-    
-    if (numeroLecturas == 1)
+
+    if (numeroLecturasCompletas == 0)
     {
+        //Terminamos la ultima lectura con la longitud calculada
+        nBytesUltimaLectura = nws.Read(paqueteDatos, 0, nBytesResto);
+        if(nBytesUltimaLectura != nBytesResto)
+        {
+            //TODO: Error por mensaje truncado
+        }
+        buffer.AddRange(paqueteDatos.ToList().GetRange(0, nBytesResto)); //Nos llevamos exclusivamente los bytes con datos, el resto? pa' los perros
+
+        //TODO: Esto pide ser otra funcion
         string baulSerializado = Encoding.UTF8.GetString(buffer.ToArray());
         BaulTcp baul = JsonSerializer.Deserialize<BaulTcp>(baulSerializado);
         Type tipoComando = Type.GetType(baul.NombreComando);

@@ -10,17 +10,18 @@ namespace Common
 {
     public class BaulTcp
     {
-        private readonly string _nombreComando;
-        private readonly string _comandoSerializado;
-
         public BaulTcp(IComando comando)
         {
-            _nombreComando = comando.GetType().Name;
-            _comandoSerializado = JsonSerializer.Serialize(comando);
+            NombreComando = comando.GetType().Name;
+            ComandoSerializado = JsonSerializer.Serialize((object)comando);
         }
 
-        public string NombreComando => _nombreComando;
+        //Este constructor es necesario para la deserializacion con System.Text.Json 
+        //(el otro falla porque tiene un parametro que no figura en la lista de propiedades de la clase)
+        public BaulTcp() { } 
 
-        public string ComandoSerializado => _comandoSerializado;
+        public string NombreComando { get; set; }
+
+        public string ComandoSerializado { get; set; }
     }
 }

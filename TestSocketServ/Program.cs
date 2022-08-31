@@ -18,6 +18,17 @@ IPHostEntry ipHost = Dns.GetHostEntry(Dns.GetHostName());
 IPAddress ipAddr = ipHost.AddressList[3];
 TcpListener tcpListener = null;
 
+IComando comando = new ComandoEnvioFichero() { Crc32 = 1, FileBase64= "asdfasdf"};
+ComandoEnvioFichero comando2= new ComandoEnvioFichero() { Crc32 = 1, FileBase64 = "asdfasdf" };
+string jsonRes = JsonSerializer.Serialize(comando);
+string jsonRes2 = JsonSerializer.Serialize(comando2);
+
+Console.WriteLine(jsonRes);
+Console.WriteLine(jsonRes2);
+
+
+
+
 try
 {
     tcpListener = new(ipAddr, port);
@@ -33,13 +44,22 @@ try
     foreach (string fichero in ficheros)
     {
         Console.WriteLine("Transmitiendo fichero " + fichero);
-        monoficheroBytes = packageFile(fichero);
+
+        ComandoEnvioFichero cef = packageFile(fichero);
+        BaulTcp bt = new BaulTcp(cef);
+
+        string baulString = JsonSerializer.Serialize<BaulTcp>(bt);
+        monoficheroBytes = Encoding.UTF8.GetBytes(baulString);
+
+        UInt32 size = (uint)monoficheroBytes.Length;
+        Byte[] bytes = BitConverter.GetBytes(size);
+        tipistrim.Write(bytes, 0, bytes.Length);  //Mandamos tamaño de comando
+
         tipistrim.Write(monoficheroBytes, 0, monoficheroBytes.Length);
         bytesTotales = bytesTotales + monoficheroBytes.Length;
-    }
-    Thread.Sleep(3000); //Sacudimos las gotitas        
+    }        
     Console.WriteLine(String.Format("Se ha intentado enviar un total de {0} bytes, bon voyage!", bytesTotales));
-    tipistrim.Close();
+    tipistrim.Close(3000); //3seg para sacudir las gotitas
 
 
 }
@@ -53,11 +73,13 @@ catch (Exception e)
 /**
  * Esta funcion se encarga de componer un objeto comando a partir de la ruta de un fichero.
  * */
-byte[] packageFile(string path)
+ComandoEnvioFichero packageFile(string path)
 {
     byte[] binaryFile = File.ReadAllBytes(path);
-    ComandoEnvioFichero fileJson = new ComandoEnvioFichero { Crc32 = 0, FileBase64 = Convert.ToBase64String(binaryFile) };
-    fileJson.Crc32 = Crc32Algorithm.Compute(binaryFile, 0, binaryFile.Length);
-    string json = JsonSerializer.Serialize(fileJson);
-    return Encoding.UTF8.GetBytes(json);
+    ComandoEnvioFichero fileJson = new ComandoEnvioFichero
+    {
+        Crc32 = Crc32Algorithm.Compute(binaryFile, 0, binaryFile.Length),
+        FileBase64 = Convert.ToBase64String(binaryFile)
+    };
+    return fileJson;
 }
