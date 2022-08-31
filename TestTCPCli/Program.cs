@@ -1,5 +1,6 @@
 ﻿using Common;
 using Force.Crc32;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -87,36 +88,41 @@ namespace TestTCPCli
                 int numeroLecturasCompletas = (int)Math.Floor((double)nBytesEsperados / paqueteDatos.Length);
                 nBytesResto = (int)(nBytesEsperados - (numeroLecturasCompletas * paqueteDatos.Length));
 
-
+                int i = 0;
                 //Empezamos lectura n-1 veces, la ultima lectura la hacemos a mano al final, para evitar condicionales en el bucle principal (optimizacion)
-                while ((nBytesUltimaLectura = nws.Read(paqueteDatos, 0, paqueteDatos.Length)) != 0 && numeroLecturasCompletas > 0)
+                while ((nBytesUltimaLectura = nws.Read(paqueteDatos, 0, paqueteDatos.Length)) != 0 && i< numeroLecturasCompletas -1)
                 {
                     buffer.AddRange(paqueteDatos);
-                    numeroLecturasCompletas--;
+                    i++;
                 }
+                buffer.AddRange(paqueteDatos);
 
-
-                if (numeroLecturasCompletas == 0)
+                if (numeroLecturasCompletas -1 == i)
                 {
                     //Terminamos la ultima lectura con la longitud calculada
                     nBytesUltimaLectura = nws.Read(paqueteDatos, 0, nBytesResto);
                     if (nBytesUltimaLectura != nBytesResto)
                     {
                         //TODO: Error por mensaje truncado
+                        throw new Exception("La cagaste, burlancaster");
                     }
                     buffer.AddRange(paqueteDatos.ToList().GetRange(0, nBytesResto)); //Nos llevamos exclusivamente los bytes con datos, el resto? pa' los perros
 
                     //TODO: Esto pide ser otra funcion
+                    var settings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.Auto };
                     string baulSerializado = Encoding.UTF8.GetString(buffer.ToArray());
-                    BaulTcp baul = JsonSerializer.Deserialize<BaulTcp>(baulSerializado);
+                    File.WriteAllText("auxDestino.json", baulSerializado);
+                    //BaulTcp baul = JsonSerializer.Deserialize<BaulTcp>(baulSerializado);
+                    BaulTcp baul = JsonConvert.DeserializeObject<BaulTcp>(baulSerializado, settings);
                     Type tipoComando = Type.GetType(baul.NombreComando);
 
                     //Parametrizamos el generico de "Deserialize" utilizando reflection. recibimos un IComando generico
-                    MethodInfo method = Type.GetType("System.Text.Json.JsonSerializer").GetMethod("Deserialize").MakeGenericMethod(new Type[] { tipoComando });
+                    //MethodInfo method = Type.GetType("System.Text.Json.JsonSerializer").GetMethod("Deserialize").MakeGenericMethod(new Type[] { tipoComando });
 
-                    IComando comandoRecibido = (IComando)method.Invoke(null, new object[] { baul.ComandoSerializado });
-                    Console.WriteLine(comandoRecibido.GetType().ToString());
-                    return comandoRecibido;
+                    //IComando comandoRecibido = (IComando)method.Invoke(null, new object[] { baul.ComandoSerializado });
+                    //Console.WriteLine(comandoRecibido.GetType().ToString());
+                    return baul.ComandoSerializado;
+                    //return comandoRecibido;
                 }
                 else
                 {

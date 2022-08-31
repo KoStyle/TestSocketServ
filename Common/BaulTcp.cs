@@ -13,7 +13,7 @@ namespace Common
         public BaulTcp(IComando comando)
         {
             NombreComando = comando.GetType().Name;
-            ComandoSerializado = JsonSerializer.Serialize((object)comando);
+            ComandoSerializado = comando;
         }
 
         //Este constructor es necesario para la deserializacion con System.Text.Json 
@@ -22,6 +22,6 @@ namespace Common
 
         public string NombreComando { get; set; }
 
-        public string ComandoSerializado { get; set; }
+        public IComando ComandoSerializado { get; set; }
     }
 }

@@ -6,6 +6,8 @@ using System.Text.Json;
 using System.Text;
 using System;
 using System.IO;
+using Newtonsoft.Json;
+using System.Threading;
 
 namespace TestTCPServ
 {
@@ -42,19 +44,28 @@ namespace TestTCPServ
                     ComandoEnvioFichero cef = packageFile(fichero);
                     BaulTcp bt = new BaulTcp(cef);
 
-                    string baulString = JsonSerializer.Serialize<BaulTcp>(bt);
+                    //string baulString = JsonSerializer.Serialize<BaulTcp>(bt);
+                    var settings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.Auto };
+                    string baulString = JsonConvert.SerializeObject(bt, settings);
+                    File.WriteAllText("auxOrigen.json", baulString);
                     monoficheroBytes = Encoding.UTF8.GetBytes(baulString);
+
+                    UInt32 redondeoSize = (uint)(Math.Ceiling((double)monoficheroBytes.Length / 256) * 256);
 
                     UInt32 size = (uint)monoficheroBytes.Length;
                     Byte[] bytes = BitConverter.GetBytes(size);
                     tipistrim.Write(bytes, 0, bytes.Length);  //Mandamos tamaño de comando
 
+
                     tipistrim.Write(monoficheroBytes, 0, monoficheroBytes.Length);
+                    tipistrim.Flush();
                     bytesTotales = bytesTotales + monoficheroBytes.Length;
                 }
                 Console.WriteLine(String.Format("Se ha intentado enviar un total de {0} bytes, bon voyage!", bytesTotales));
-                tipistrim.Close(3000); //3seg para sacudir las gotitas
+                
 
+                tipistrim.Close(30000); //3seg para sacudir las gotitas
+                Console.ReadLine();
 
             }
             catch (Exception e)
@@ -62,6 +73,7 @@ namespace TestTCPServ
                 Console.WriteLine(e.ToString());
                 Console.WriteLine("Pensabas que iba a hacer algo con la excepcion? ja");
                 Console.WriteLine("Linguo HA muerto");
+                Console.ReadLine();
             }
 
             /**
